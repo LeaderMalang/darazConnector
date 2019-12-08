@@ -1,53 +1,106 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, fields, api
+from odoo import models, fields, api,_
+from odoo.exceptions import Warning
+from datetime import datetime ,timezone
+import requests
+import urllib.parse
+from hashlib import sha256
+from hmac import HMAC
+import json
 
 
 class darazCategory(models.Model):
     _inherit = "product.category"
 
     leaf=fields.Boolean("Leaf",default=False)
-    categoryId=fields.Integer("Daraz Category ID")
+    darazCategoryId=fields.Integer("Daraz Category ID")
+    darazStoreId=fields.One2many('daraz.connector','id',string="Daraz Store")
 
 
-    def getCategories(self):
-        import requests
-        import hashlib
-        from datetime import datetime
-        import pytz
+class syncDarazCategories(models.TransientModel):
+    _name = "sync.darazcategories"
+    _description = "Sync Daraz Store Categories"
 
-        url = "https://api.sellercenter.daraz.pk"
-        key="A8B6GG7x7O45ffCQJfkydp1eTHv9D8RfTOEc2lLkfZhpQBUWiMa3qg1K"
-        signature=hashlib.sha256(key.encode('utf-8')).hexdigest()
-        now = datetime.now()
-        isoDate=now.isoformat()
-        print(isoDate)
-        year = now.year
-        month = now.month
-        day = now.day
-        hour = now.hour
-        minute = now.minute
-        second = now.second
-        utc = "+5:00"
-        datestr = str(year) + "-" + str(month) + "-" + str(day) + "T" + str(hour) + ":" + str(minute) + ":" + str(
-            second) + utc
-        action="GetCategoryTree"
-        format="json"
-        userId="zmmart@gmail.com"
-         #querystring = {"Action": action, "Format": format, "Timestamp": datestr,
-        #                "UserID": userId, "Version": "1.0",
-        #                "Signature": signature}
-        querystring = {"Action": "GetCategoryTree", "Format": "json", "Timestamp": "2019-12-03T12%3A36%3A37%2B00%3A00",
-                       "UserID": "zmmart%40gmail.com", "Version": "1.0",
-                       "Signature": "8d7219e63f7459038aaa2cec9b6258e43272fe284b6e54d5c5b02de648520f76"}
+    darazStoreId = fields.Many2one('daraz.connector', 'Daraz Store')
+
+    def doConnection(self,action=None,req=None):
+        darazStore = self.env['daraz.connector'].browse(self.darazStoreId.id)
+        url = darazStore.api_url
+        key = darazStore.api_key
+        action =action if action else "GetCategoryTree"
+        format = "json"
+        userId = darazStore.userId
+        method=req if req  else 'GET'
+
+        now = datetime.now().timestamp()
+        test = datetime.fromtimestamp(now, tz=timezone.utc).replace(microsecond=0).isoformat()
+        parameters = {
+            'UserID': userId,
+            'Version': "1.0",
+            'Action':action,
+            'Format': format,
+            'Timestamp': test}
+
+        concatenated = urllib.parse.urlencode(sorted(parameters.items()))
+        data = concatenated.encode('utf-8')
+        parameters['Signature'] = HMAC(key.encode('utf-8'), data,
+                                       sha256).hexdigest()
+
+
         headers = {
-            'Content-Type': "application/x-www-form-urlencoded",
+            'Content-Type': "application/json",
             'Accept': "*/*",
             'Connection': "keep-alive",
             'cache-control': "no-cache"
         }
+        try:
+            response = requests.request(method, url, headers=headers, params=parameters)
+        except Exception as e:
 
-        response = requests.request("GET", url, headers=headers, params=querystring)
 
-        print(response.text)
+            raise Warning(_(response.text))
+
+
+
+        return json.loads(response.text)
+
+    def createCategory(self,record,recModel,parent=None):
+        print(recModel,parent,record)
+        name=record.get("name")
+        categoryId=record.get("categoryId")
+        leaf=record.get("leaf")
+        if parent is not None:
+            category = recModel.create({"name": name, "darazCategoryId": categoryId, "leaf": leaf,"parent_id":parent})
+        else:
+            category = recModel.create({"name": name, "darazCategoryId": categoryId, "leaf": leaf})
+        return category.id
+
+    def rec(self,data, parent=None):
+        productCategory = self.env['product.category']
+        for record in data:
+            if record.get('leaf') == False:
+                parent_id = self.createCategory(record,productCategory,parent)
+
+                self.rec(record.get('children'), parent_id)
+            else:
+                self.createCategory(record,productCategory)
+        return True
+    def getCategories(self):
+        # productCategory = self.env['product.category']
+        # category = productCategory.create({"name": "name"})
+        # print(category.id)
+        res=self.doConnection('GetCategoryTree','GET')
+        result=self.rec(res.get('SuccessResponse').get('Body'))
+        if result==True:
+            print("Successfully Imported Categories")
+        # for record in res.get('SuccessResponse').get('Body'):
+        #     categoryId=record.get('categoryId')
+        #     leaf=record.get('leaf')
+        #     name=record.get('name')
+        #     category=productCategory.create({"name":name,"darazCategoryId":categoryId,"leaf":leaf})
+        #     print(category.id)
+        #     for child in record.get("children"):
+        #         pass
+
 

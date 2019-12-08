@@ -1,16 +1,16 @@
 <odoo>
   <data>
-    <record id="product_category_list_view_daraz" model="ir.ui.view">
-            <field name="name">product.category.list.daraz</field>
-            <field name="model">product.category</field>
+<!--    <record id="product_category_list_view_daraz" model="ir.ui.view">-->
+<!--            <field name="name">product.category.list.daraz</field>-->
+<!--            <field name="model">product.category</field>-->
 
-            <field name="inherit_id" ref="product.product_category_list_view"></field>
-            <field name="arch" type="xml">
-                <xpath expr="//field[@name='display_name']" position="before">
-                 <button name="getCategories" string="Get Categories" type="object" class="btn-primary"/>
-            </xpath>
-            </field>
-        </record>
+<!--            <field name="inherit_id" ref="product.product_category_list_view"></field>-->
+<!--            <field name="arch" type="xml">-->
+<!--                <xpath expr="//field[@name='display_name']" position="before">-->
+<!--                 <button name="getCategories" string="Get Categories" type="object" class="btn-primary"/>-->
+<!--            </xpath>-->
+<!--            </field>-->
+<!--        </record>-->
     <!-- explicit list view definition -->
 
 <!--    <record model="ir.ui.view" id="daraz_connector_list">-->
@@ -50,7 +50,25 @@
       </field>
     </record>
 
+<record model="ir.ui.view" id="sync_darazCategories">
+    <field name="name">Daraz Store Categoreis</field>
+      <field name="model">sync.darazcategories</field>
+      <field name="arch" type="xml">
+          <form string="Sync Daraz Categories">
+              <field name="darazStoreId" />
+              <footer>
+                  <button name="getCategories" string="Get Categories" type="object" class="btn-primary"/>
+              </footer>
+          </form>
+      </field>
+</record>
+      <record model="ir.actions.act_window" id="daraz_sync_categories_action_window">
+          <field name="name">Daraz Store Categories</field>
+          <field name="res_model">sync.darazcategories</field>
+          <field name="view_mode">form</field>
 
+          <field name="target">new</field>
+      </record>
     <!-- actions opening views on models -->
 
     <record model="ir.actions.act_window" id="daraz_connector_action_window">
@@ -90,11 +108,14 @@
     -->
     <menuitem name="Daraz Stores" id="daraz_connector_child" parent="daraz_connector_menu_root" />
 
+
     <!-- actions -->
 
     <menuitem name="Stores" id="daraz_connector_menu_1_list" parent="daraz_connector_child"
             action="daraz_connector_action_window"  />
 
+      <menuitem name="Daraz Stores Categories" id="daraz_categories" parent="stock.menu_product_in_config_stock"
+      action="daraz_sync_categories_action_window"/>
 
 
   </data>
